@@ -1,0 +1,15 @@
+./farm -n 2 z0.dat
+./farm z0.dat 
+./farm z0.dat -n 3
+
+
+# Sottoclasse di threading.Thread 
+class ClientThread(threading.Thread):
+    def __init__(self,conn,addr):
+      threading.Thread.__init__(self)
+      self.conn = conn
+      self.addr = addr
+    def run(self):
+      # print("thread running with: ", self.addr)
+      handle_conn(self.conn,self.addr)
+      # print("thread end")
