@@ -2,7 +2,7 @@
 
 // localhost address and a port for the socket
 #define HOST "127.0.0.1"
-#define PORT 59675
+#define PORT 59640
 
 int qlen=8; // default buffer size
 extern char *optarg;  // for using getopt(3)   
@@ -69,7 +69,7 @@ void *wtbody(void * data){
 
     // create socket 
     if ((skt_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-      fprintf(stderr,"Socket creation error. \n");
+      perror("Socket creation error. \n");
     
     // Address assigment
     serv_addr.sin_family = AF_INET;
@@ -87,29 +87,34 @@ void *wtbody(void * data){
     // Write total sum in the socket, one half at a time.
     int second_half = htonl(tot_sum);
     int first_half = htonl(tot_sum >> 32);
+    /* 
+    printf("\nFirst half: %d\n", first_half);
+    printf("\nSecond half: %d\n", second_half); 
+    */
+      
     
     // first send the request
     e = writen(skt_fd,&req_len,sizeof(req_len));
-    if(e!=sizeof(int)) fprintf(stderr,"Write Error(req_len). \n");
+    if(e!=sizeof(int)) perror("Write Error(req_len). \n");
     e = writen(skt_fd,&req,htonl(req_len)); //ntohl(req_len) = num bytes
-    if(e!=htonl(req_len)) fprintf(stderr,"Write Error (req). \n");
+    if(e!=htonl(req_len)) perror("Write Error (req). \n");
     
     // then send the sum
     e = writen(skt_fd,&first_half,sizeof(first_half));
-    if(e!=sizeof(int)) fprintf(stderr,"Write Error. \n");
+    if(e!=sizeof(first_half)) perror("Write Error. \n");
     e = writen(skt_fd,&second_half,sizeof(second_half));
-    if(e!=sizeof(int)) fprintf(stderr,"Write Error. \n");
+    if(e!=sizeof(second_half)) perror("Write Error. \n");
     
     // then send file name, first the length, then the name
     int f_len = htonl(strlen(fn));
     e = writen(skt_fd,&f_len,sizeof(f_len));
-    if(e!=sizeof(f_len)) fprintf(stderr,"Write Error (f_len). \n");
+    if(e!=sizeof(f_len)) perror("Write Error (f_len). \n");
     e = writen(skt_fd,fn,ntohl(f_len)); //ntohl(f_len) = num bytes
-    if(e!=ntohl(f_len)) fprintf(stderr,"Write Error (fn). \n");
+    if(e!=ntohl(f_len)) perror("Write Error (fn). \n");
     
     // Close connection
     if(close(skt_fd)<0)
-      fprintf(stderr,"Error while closing socket.");
+      perror("Error while closing socket.");
   }
 
   pthread_exit(NULL);
