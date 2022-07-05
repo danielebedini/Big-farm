@@ -140,22 +140,22 @@ int main(int argc, char *argv[]) {
   sigaction(SIGINT, NULL, &sig_action);
   sig_action.sa_handler=sig_handler;
   sigaction(SIGINT, &sig_action, NULL);
-  
+  //nt
   int opt; // for using getopt() 
-  int nt=4, del=0, no=0; // default values
+  int tn=4, del=0, on=0; // default values
   char *endptr;
   while((opt = getopt(argc,argv,"n:q:t:"))!=-1){
     switch (opt){ 
       case 'n':
         // threads number
-        nt = atoi(optarg);
-        no++;
-        assert(nt>0);
+        tn = atoi(optarg);
+        on++;
+        assert(tn>0);
       break;
       case 'q':
         // buffer length
         qlen=atoi(optarg);
-        no++;
+        on++;
         assert(qlen>0);
       break;
       case 't':
@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
           return 0;
         }else{
           del=atoi(optarg);
-          no++;
+          on++;
         }
         assert(del>=0);
       break;
@@ -177,15 +177,15 @@ int main(int argc, char *argv[]) {
   char *buffer[qlen]; // shared buffer
   int pindex=0,cindex=0; // prod and con index
   pthread_mutex_t cmutex = PTHREAD_MUTEX_INITIALIZER; // mutex
-  pthread_t wt[nt]; // worker threads
-  wdata wdata[nt]; // data for the worker threads
+  pthread_t wt[tn]; // worker threads
+  wdata wdata[tn]; // data for the worker threads
   // semaphores for prod and cons
   sem_t sem_free_slots, sem_data_items; 
   xsem_init(&sem_free_slots,0,qlen,__LINE__,__FILE__);
   xsem_init(&sem_data_items,0,0,__LINE__,__FILE__);
   
   // worker's threads start -> nt = number of threads
-  for(int i=0;i<nt;i++) {
+  for(int i=0;i<tn;i++) {
     wdata[i].buffer = buffer;
 		wdata[i].cindex = &cindex;
 		wdata[i].cmutex = &cmutex;
@@ -204,14 +204,14 @@ int main(int argc, char *argv[]) {
   }
   
   // stop the threads
-  for(int i=0;i<nt;i++) {
+  for(int i=0;i<tn;i++) {
     xsem_wait(&sem_free_slots,__LINE__,__FILE__);
     buffer[pindex++ % qlen] = "-1";
     xsem_post(&sem_data_items,__LINE__,__FILE__);
   } 
   
   // thread join
-  for(int i=0;i<nt;i++) {
+  for(int i=0;i<tn;i++) {
     xpthread_join(wt[i],NULL,__LINE__,__FILE__);
   }
 
