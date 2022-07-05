@@ -17,7 +17,6 @@ class ClientThread(threading.Thread):
     def run(self):
       handle_conn(self.conn,self.addr)
       
-
 def main(host=HOST, port=PORT):
   # create socket
   with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
