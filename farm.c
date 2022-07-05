@@ -21,7 +21,6 @@ Thread Worker body:
 
 This threads are launched by the MasterWorker process, each thread reads a file name in the buffer given by th Master, calculates the total sum of long numbers in given file.
 Then every thread creates a socket with the server Collector.py and sends the sum.
-
 */
 
 void *wtbody(void * data){
