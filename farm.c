@@ -153,7 +153,8 @@ int main(int argc, char *argv[]) {
         // prod/cons delay
         strtol(optarg,&endptr,10);
         if(endptr==optarg){
-          xtermina("Wrong Delay.\n",__LINE__,__FILE__);
+          fprintf(stderr,"Wrong Delay.\n");
+          return 0;
         }else{
           del=atoi(optarg);
         }
@@ -211,6 +212,3 @@ int main(int argc, char *argv[]) {
   
   return 0;
 }
-
-
-
