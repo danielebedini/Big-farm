@@ -6,7 +6,7 @@
 
 int qlen=8; // default buffer size
 extern char *optarg;  // for using getopt(3)   
-volatile sig_atomic_t sig = 1; //for using SIGINT
+volatile sig_atomic_t sig_arrived = 0; // for using SIGINT
 
 typedef struct { 
   char **buffer;              // buffer shared between prod and cons   
@@ -57,9 +57,9 @@ void *wtbody(void * data){
         i++;
       }while(true);
     }else{
+      fprintf(stderr,"No such file (%s) in this directory.\n", fn);
       continue;
     }
-    
     fclose(f);
     
     // Gives the sum to the Collector
@@ -124,29 +124,39 @@ This is the main process of the project, it handles the SIGINT signal, checks th
 
 */
 
+void sig_handler(int sig){
+  if(sig==SIGINT) sig_arrived=1;
+}
+
 int main(int argc, char *argv[]) {
   
-  // TODO: handle SIGINT signal 
-
   // check args
   if (argc < 2) {
     printf("Uso: %s file [file ...]\n", argv[0]);
     return 1;
   } 
-
+  
+  //Handling signal SIGINT
+  struct sigaction sig_action;
+  sigaction(SIGINT, NULL, &sig_action);
+  sig_action.sa_handler=sig_handler;
+  sigaction(SIGINT, &sig_action, NULL);
+  
   int opt; // for using getopt() 
-  int nt=4,del=0; // default values
+  int nt=4, del=0, no=0; // default values
   char *endptr;
   while((opt = getopt(argc,argv,"n:q:t:"))!=-1){
     switch (opt){ 
       case 'n':
         // threads number
         nt = atoi(optarg);
+        no++;
         assert(nt>0);
       break;
       case 'q':
         // buffer length
         qlen=atoi(optarg);
+        no++;
         assert(qlen>0);
       break;
       case 't':
@@ -157,6 +167,7 @@ int main(int argc, char *argv[]) {
           return 0;
         }else{
           del=atoi(optarg);
+          no++;
         }
         assert(del>=0);
       break;
@@ -185,7 +196,7 @@ int main(int argc, char *argv[]) {
   }
   
   // MW puts everything typed in the command line into the buffer
-  for(int i=1; i<argc; i++){
+  for(int i=2*no+1; i<argc && !sig_arrived; i++){ //for stops if sig_arrived is 1
     // producer puts filename in the buffer  
     xsem_wait(&sem_free_slots,__LINE__,__FILE__);
     buffer[pindex++ % qlen] = argv[i];
