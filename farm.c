@@ -2,17 +2,18 @@
 
 // localhost address and a port for the socket
 #define HOST "127.0.0.1"
-#define PORT 59640
+#define PORT 59643
 
 int qlen=8; // default buffer size
 extern char *optarg;  // for using getopt(3)   
+volatile sig_atomic_t sig = 1; //for using SIGINT
 
 typedef struct { 
-  char **buffer;              //buffer shared between prod and cons   
-  int *cindex;                //buffer index
-  pthread_mutex_t *cmutex;    //mutex 
-  sem_t *sem_free_slots;      //semaphore for free slots
-  sem_t *sem_data_items;      //semaphore for data items
+  char **buffer;              // buffer shared between prod and cons   
+  int *cindex;                // buffer index
+  pthread_mutex_t *cmutex;    // mutex 
+  sem_t *sem_free_slots;      // semaphore for free slots
+  sem_t *sem_data_items;      // semaphore for data items
 } wdata;
 
 /* 
@@ -30,7 +31,7 @@ void *wtbody(void * data){
   long tot_sum=0;
   
   while(true){
-    //reads filename from buffer, then increments the index by 1
+    // reads filename from buffer, then increments the index by 1
     xsem_wait(wd->sem_data_items,__LINE__,__FILE__);
 	  xpthread_mutex_lock(wd->cmutex,__LINE__,__FILE__);
     fn = wd->buffer[*(wd->cindex) % qlen];
@@ -38,12 +39,12 @@ void *wtbody(void * data){
   	xpthread_mutex_unlock(wd->cmutex,__LINE__,__FILE__);
     xsem_post(wd->sem_free_slots,__LINE__,__FILE__);
     
-    //check if thread must end
+    // check if thread must end
     if(!strcmp(fn,"-1")){
       break;
     }
     
-  //reads the file read from the buffer and calculates the
+  // reads the file read from the buffer and calculates the
     FILE *f = fopen(fn,"rb");
     if(f!=NULL){
       int i=0;
@@ -51,25 +52,24 @@ void *wtbody(void * data){
       do{
         size_t e = fread(&num,sizeof(num),1,f);
         if(e!=1) break;
-        //sums(i*file[i]) from i=0 to n=long numbers in given file
+        // sums(i*file[i]) from i=0 to n=long numbers in given file
         tot_sum+=i*num;
         i++;
       }while(true);
-      printf("\nFile: %s; Sum: %ld\n\n",fn,tot_sum);
     }else{
       continue;
     }
     
     fclose(f);
     
-    //Gives the sum to the Collector
+    // Gives the sum to the Collector
     int skt_fd;      // socket file descriptor 
     struct sockaddr_in serv_addr; // server address
-    size_t e; //error checking
+    size_t e; // error checking
 
     // create socket 
     if ((skt_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-      perror("Socket creation error. \n");
+      perror("Socket creation error (MW). \n");
     
     // Address assigment
     serv_addr.sin_family = AF_INET;
@@ -79,42 +79,38 @@ void *wtbody(void * data){
     
     // Open connection
     if (connect(skt_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) 
-      perror("Error while opening connection (82). \n");
+      perror("Error while opening connection (MW). \n");
     
     // MW Request
     char req[2] = "MW";
     int req_len = htonl(strlen(req));
-    // Write total sum in the socket, one half at a time.
+    
+    // write total sum in the socket, one half at a time.
     int second_half = htonl(tot_sum);
     int first_half = htonl(tot_sum >> 32);
-    /* 
-    printf("\nFirst half: %d\n", first_half);
-    printf("\nSecond half: %d\n", second_half); 
-    */
-      
-    
+
     // first send the request
     e = writen(skt_fd,&req_len,sizeof(req_len));
-    if(e!=sizeof(int)) perror("Write Error(req_len). \n");
+    if(e!=sizeof(int)) perror("Write Error req_len (MW). \n");
     e = writen(skt_fd,&req,htonl(req_len)); //ntohl(req_len) = num bytes
-    if(e!=htonl(req_len)) perror("Write Error (req). \n");
+    if(e!=htonl(req_len)) perror("Write Error req (MW). \n");
     
     // then send the sum
     e = writen(skt_fd,&first_half,sizeof(first_half));
-    if(e!=sizeof(first_half)) perror("Write Error. \n");
+    if(e!=sizeof(first_half)) perror("Write Error first-half (MW). \n");
     e = writen(skt_fd,&second_half,sizeof(second_half));
-    if(e!=sizeof(second_half)) perror("Write Error. \n");
+    if(e!=sizeof(second_half)) perror("Write Error second-half (MW). \n");
     
     // then send file name, first the length, then the name
     int f_len = htonl(strlen(fn));
     e = writen(skt_fd,&f_len,sizeof(f_len));
-    if(e!=sizeof(f_len)) perror("Write Error (f_len). \n");
+    if(e!=sizeof(f_len)) perror("Write Error f_len (MW). \n");
     e = writen(skt_fd,fn,ntohl(f_len)); //ntohl(f_len) = num bytes
-    if(e!=ntohl(f_len)) perror("Write Error (fn). \n");
-    
+    if(e!=ntohl(f_len)) perror("Write Error fn (MW). \n");
+
     // Close connection
     if(close(skt_fd)<0)
-      perror("Error while closing socket.");
+      perror("Error while closing socket (MW).\n");
   }
 
   pthread_exit(NULL);
@@ -129,57 +125,49 @@ This is the main process of the project, it handles the SIGINT signal, checks th
 */
 
 int main(int argc, char *argv[]) {
-  //TODO: handle SIGINT signal 
+  
+  // TODO: handle SIGINT signal 
 
-  //printf("\nMaster Worker has begun.\n");
-  //check args
+  // check args
   if (argc < 2) {
     printf("Uso: %s file [file ...]\n", argv[0]);
     return 1;
   } 
-  
+
   int opt; // for using getopt() 
   int nt=4,del=0; // default values
-  
+  char *endptr;
   while((opt = getopt(argc,argv,"n:q:t:"))!=-1){
     switch (opt){ 
       case 'n':
-        //threads number
+        // threads number
         nt = atoi(optarg);
         assert(nt>0);
       break;
       case 'q':
-        //buffer length
+        // buffer length
         qlen=atoi(optarg);
         assert(qlen>0);
       break;
       case 't':
-        //prod/cons delay
-        del=atoi(optarg);
+        // prod/cons delay
+        strtol(optarg,&endptr,10);
+        if(endptr==optarg){
+          xtermina("Wrong Delay.\n",__LINE__,__FILE__);
+        }else{
+          del=atoi(optarg);
+        }
         assert(del>=0);
-      break;
-      default:
-        //default values
-        printf("Default values: \n");
-        nt=4;
-        qlen=8;
-        del=0;
       break;
     }
   }
-  
-  /* printf("-------------- \n");
-  printf("num. threads: %d\n", nt);
-  printf("buffer length: %d\n", qlen);
-  printf("delay: %d\n", del);
-  printf("-------------- \n"); */
 
   // initializations: buffer, threads and semaphores
-  char *buffer[qlen]; //shared buffer
-  int pindex=0,cindex=0; //prod and con index
-  pthread_mutex_t cmutex = PTHREAD_MUTEX_INITIALIZER; //mutex
-  pthread_t wt[nt]; //worker threads
-  wdata wdata[nt]; //data for the worker threads
+  char *buffer[qlen]; // shared buffer
+  int pindex=0,cindex=0; // prod and con index
+  pthread_mutex_t cmutex = PTHREAD_MUTEX_INITIALIZER; // mutex
+  pthread_t wt[nt]; // worker threads
+  wdata wdata[nt]; // data for the worker threads
   // semaphores for prod and cons
   sem_t sem_free_slots, sem_data_items; 
   xsem_init(&sem_free_slots,0,qlen,__LINE__,__FILE__);
@@ -196,13 +184,12 @@ int main(int argc, char *argv[]) {
   }
   
   // MW puts everything typed in the command line into the buffer
-  
   for(int i=1; i<argc; i++){
-    //producer puts filename in the buffer  
+    // producer puts filename in the buffer  
     xsem_wait(&sem_free_slots,__LINE__,__FILE__);
     buffer[pindex++ % qlen] = argv[i];
     xsem_post(&sem_data_items,__LINE__,__FILE__); 
-    //usleep(del);
+    usleep(del*1000); // delay between a write and another
   }
   
   // stop the threads
@@ -217,7 +204,10 @@ int main(int argc, char *argv[]) {
     xpthread_join(wt[i],NULL,__LINE__,__FILE__);
   }
 
-  //printf("\nMaster Worker has finished\n\n");
+  // destroy mutex and semaphores
+  pthread_mutex_destroy(&cmutex);
+  sem_destroy(&sem_data_items);
+  sem_destroy(&sem_free_slots); 
   
   return 0;
 }
