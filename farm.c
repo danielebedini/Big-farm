@@ -195,7 +195,7 @@ int main(int argc, char *argv[]) {
   }
   
   // MW puts everything typed in the command line into the buffer
-  for(int i=2*no+1; i<argc && !sig_arrived; i++){ //for stops if sig_arrived is 1
+  for(int i=2*on+1; i<argc && !sig_arrived; i++){ //for stops if sig_arrived is 1
     // producer puts filename in the buffer  
     xsem_wait(&sem_free_slots,__LINE__,__FILE__);
     buffer[pindex++ % qlen] = argv[i];
