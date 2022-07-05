@@ -6,6 +6,7 @@ For each long asks to the Collector if he recived the filenames whit a specific 
 Client does a request for each long.
 
 If Client is called without parameters in the command line, then  a special request is sent to the Collector, this request is for the complete list of (sum,filename).
+
 */
 
 #include "xerrori.h"
