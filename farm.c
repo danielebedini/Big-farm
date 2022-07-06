@@ -5,7 +5,8 @@
 #define PORT 59643
 
 int qlen=8; // default buffer size
-extern char *optarg;  // for using getopt(3)   
+extern char *optarg;  // for using getopt(3)  
+extern int optind; // for skipping optional parameters
 volatile sig_atomic_t sig_arrived = 0; // for using SIGINT
 
 typedef struct { 
@@ -20,7 +21,7 @@ typedef struct {
 Thread Worker body:
 
 This threads are launched by the MasterWorker process, each thread reads a file name in the buffer given by th Master, calculates the total sum of long numbers in given file.
-Then every thread creates a socket with the server Collector.py and sends the sum.
+Then every thread creates a socket with the server Collector.py and sends the sum and its corresponding filename.
 */
 
 void *wtbody(void * data){
@@ -30,7 +31,7 @@ void *wtbody(void * data){
   long tot_sum=0;
   
   while(true){
-    // reads filename from buffer, then increments the index by 1
+    // reads filename from buffer, then increments the buffer index by 1
     xsem_wait(wd->sem_data_items,__LINE__,__FILE__);
 	  xpthread_mutex_lock(wd->cmutex,__LINE__,__FILE__);
     fn = wd->buffer[*(wd->cindex) % qlen];
@@ -43,7 +44,7 @@ void *wtbody(void * data){
       break;
     }
     
-  // reads the file read from the buffer and calculates the
+  // reads the file name read from the buffer, opens the file then calculates the sum
     FILE *f = fopen(fn,"rb");
     if(f!=NULL){
       int i=0;
@@ -61,8 +62,8 @@ void *wtbody(void * data){
     }
     fclose(f);
     
-    // Gives the sum to the Collector
-    int skt_fd;      // socket file descriptor 
+    // gives the sum and the file name to the Collector
+    int skt_fd; // socket file descriptor 
     struct sockaddr_in serv_addr; // server address
     size_t e; // error checking
 
@@ -70,48 +71,48 @@ void *wtbody(void * data){
     if ((skt_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
       perror("Socket creation error (MW). \n");
     
-    // Address assigment
-    serv_addr.sin_family = AF_INET;
-    // port number must me converted in  network order
+    // address and port assigment, port number must me converted in  network order
+    serv_addr.sin_family = AF_INET; 
     serv_addr.sin_port = htons(PORT);
     serv_addr.sin_addr.s_addr = inet_addr(HOST);
     
-    // Open connection
+    // open connection
     if (connect(skt_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) 
       perror("Error while opening connection (MW). \n");
     
-    // MW Request
+    // MW request
     char req[2] = "MW";
     int req_len = htonl(strlen(req));
     
-    // write total sum in the socket, one half at a time.
-    int second_half = htonl(tot_sum);
-    int first_half = htonl(tot_sum >> 32);
+    // write total sum in the socket, one half at a time
+    int second_half = htonl(tot_sum); // second_half -> 4 least significative bytes of the long
+    int first_half = htonl(tot_sum >> 32); // first_half -> 4 most significative bytes of the long
 
-    // first send the request
+    // first send the length of the request, then the request
     e = writen(skt_fd,&req_len,sizeof(req_len));
     if(e!=sizeof(int)) perror("Write Error req_len (MW). \n");
-    e = writen(skt_fd,&req,htonl(req_len)); //ntohl(req_len) = num bytes
+    e = writen(skt_fd,&req,htonl(req_len)); 
     if(e!=htonl(req_len)) perror("Write Error req (MW). \n");
     
-    // then send the sum
+    // then send the sum, one half at a time
     e = writen(skt_fd,&first_half,sizeof(first_half));
     if(e!=sizeof(first_half)) perror("Write Error first-half (MW). \n");
     e = writen(skt_fd,&second_half,sizeof(second_half));
     if(e!=sizeof(second_half)) perror("Write Error second-half (MW). \n");
     
-    // then send file name, first the length, then the name
+    // then send file name length, then the file name
     int f_len = htonl(strlen(fn));
     e = writen(skt_fd,&f_len,sizeof(f_len));
     if(e!=sizeof(f_len)) perror("Write Error f_len (MW). \n");
     e = writen(skt_fd,fn,ntohl(f_len)); //ntohl(f_len) = num bytes
     if(e!=ntohl(f_len)) perror("Write Error fn (MW). \n");
 
-    // Close connection
+    // close connection
     if(close(skt_fd)<0)
       perror("Error while closing socket (MW).\n");
   }
 
+  //thread exit
   pthread_exit(NULL);
 }
 
@@ -120,9 +121,9 @@ void *wtbody(void * data){
 MasterWorker body (exe: farm):
 
 This is the main process of the project, it handles the SIGINT signal, checks the input given by the user from the command line, then launches the Worker threads.
-
 */
 
+// signal handling
 void sig_handler(int sig){
   if(sig==SIGINT) sig_arrived=1;
 }
@@ -135,38 +136,36 @@ int main(int argc, char *argv[]) {
     return 1;
   } 
   
-  //Handling signal SIGINT
+  // handling signal SIGINT
   struct sigaction sig_action;
   sigaction(SIGINT, NULL, &sig_action);
   sig_action.sa_handler=sig_handler;
   sigaction(SIGINT, &sig_action, NULL);
-  //nt
+  
   int opt; // for using getopt() 
-  int tn=4, del=0, on=0; // default values
-  char *endptr;
+  int tn=4, del=0; // default values
+  char *endptr; // for using strtol
   while((opt = getopt(argc,argv,"n:q:t:"))!=-1){
     switch (opt){ 
       case 'n':
-        // threads number
+        // threads number, must be greater than 0
         tn = atoi(optarg);
-        on++;
         assert(tn>0);
       break;
       case 'q':
-        // buffer length
+        // buffer length, must be greater than 0
         qlen=atoi(optarg);
-        on++;
         assert(qlen>0);
       break;
       case 't':
         // prod/cons delay
+        // check if arguments of delay are correct, must be a number greater or equal to 0.
         strtol(optarg,&endptr,10);
         if(endptr==optarg){
           fprintf(stderr,"Wrong Delay.\n");
           return 0;
         }else{
           del=atoi(optarg);
-          on++;
         }
         assert(del>=0);
       break;
@@ -175,7 +174,7 @@ int main(int argc, char *argv[]) {
 
   // initializations: buffer, threads and semaphores
   char *buffer[qlen]; // shared buffer
-  int pindex=0,cindex=0; // prod and con index
+  int pindex=0,cindex=0; // prod and cons index
   pthread_mutex_t cmutex = PTHREAD_MUTEX_INITIALIZER; // mutex
   pthread_t wt[tn]; // worker threads
   wdata wdata[tn]; // data for the worker threads
@@ -194,8 +193,10 @@ int main(int argc, char *argv[]) {
     xpthread_create(&wt[i],NULL,wtbody,&wdata[i],__LINE__,__FILE__);
   }
   
-  // MW puts everything typed in the command line into the buffer
-  for(int i=2*on+1; i<argc && !sig_arrived; i++){ //for stops if sig_arrived is 1
+  // MW puts the file names typed in the command line into the buffer
+  for(int i=optind; i<argc && !sig_arrived; i++){ 
+    // this for stops if sig_arrived is 1
+    // optind is used for skipping optional parameters
     // producer puts filename in the buffer  
     xsem_wait(&sem_free_slots,__LINE__,__FILE__);
     buffer[pindex++ % qlen] = argv[i];
@@ -203,7 +204,7 @@ int main(int argc, char *argv[]) {
     usleep(del*1000); // delay between a write and another
   }
   
-  // stop the threads
+  // stop the threads if the thread reads "-1"
   for(int i=0;i<tn;i++) {
     xsem_wait(&sem_free_slots,__LINE__,__FILE__);
     buffer[pindex++ % qlen] = "-1";
