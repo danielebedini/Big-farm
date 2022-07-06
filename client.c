@@ -1,12 +1,12 @@
-/**
-Client Process:
+/*
+Client Process (exe: farm):
 
-Asks Collector about the data recived from the MasterWorker, it takes a sequence of long by the command line.
+Asks Collector about the data recived from the MasterWorker, it can take a sequence of long by the command line.
+
 For each long asks to the Collector if he recived the filenames whit a specific sum.
 Client does a request for each long.
 
 If Client is called without parameters in the command line, then  a special request is sent to the Collector, this request is for the complete list of (sum,filename).
-
 */
 
 #include "xerrori.h"
@@ -16,9 +16,9 @@ If Client is called without parameters in the command line, then  a special requ
 
 int main(int argc, char *argv[]) {
   
-  if(argc==1){  // TESTED and WORKING
-    // client called without arguments in the commmand line
-    // Send request 1 to Collector 
+  if(argc==1){ 
+    // Client called without arguments in the commmand line
+    // send request 1 to Collector 
     
     int skt_fd = 0;      // socket file descriptor 
     struct sockaddr_in serv_addr; // server address
@@ -26,39 +26,38 @@ int main(int argc, char *argv[]) {
 
     // create socket 
     if ((skt_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-      perror("Socket creation error. \n");
+      perror("Socket creation error (C1). \n");
     
-    // Address assigment
+    // address assigment, port number must me converted in  network order
     serv_addr.sin_family = AF_INET;
-    // port number must me converted in  network order
     serv_addr.sin_port = htons(PORT);
     serv_addr.sin_addr.s_addr = inet_addr(HOST);
     
-    // Open connection
+    // open connection
     if (connect(skt_fd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) 
-      perror("Error while opening connection. \n");
+      perror("Error while opening connection (C1). \n");
 
-    //Send request Client 1
+    // request: Client 1
     char req[2] = "C1";
     int req_len = htonl(strlen(req));
     
     // First the length then the request
     e = writen(skt_fd,&req_len,sizeof(req_len));
-    if(e!=sizeof(req_len)) perror("Client Write Error (req 1). \n");
-    e = writen(skt_fd,&req,ntohl(req_len)); //ntohl(req_len) = num bytes
-    if(e!=ntohl(req_len)) perror("Client Write Error (req 2). \n");
+    if(e!=sizeof(req_len)) perror("Client Write Error req_len (C1). \n");
+    e = writen(skt_fd,&req,ntohl(req_len));
+    if(e!=ntohl(req_len)) perror("Client Write Error req (C1). \n");
     
     // First read how many things to read
     int len;
     e = readn(skt_fd,&len,sizeof(int));
     len = ntohl(len);
-    if(e!=sizeof(int)) perror("Error from reading the response (len). \n");
+    if(e!=sizeof(int)) perror("Error from reading len (C1). \n");
 
     // check len 
     if(len==0){
-      fprintf(stdout, "Nessun file.\n");
+      fprintf(stdout,"Nessun file.\n");
     }else{
-      // store every couple in 2 arrays, one fur sums and one for filenames, both have same dimension (len)
+      
       char *fn, *sum;
       int fn_len, sum_len;
 
@@ -73,7 +72,7 @@ int main(int argc, char *argv[]) {
         e = readn(skt_fd,sum,sum_len);
         // \0 at the end of the string for solving valgrind errors 
         sum[sum_len]='\0';
-        if(e!=sum_len) perror("Error from reading sum  (C1).\n");
+        if(e!=sum_len) perror("Error from reading sum (C1).\n");
         
         // read file length then filename 
         e = readn(skt_fd,&fn_len,sizeof(int));
@@ -85,11 +84,11 @@ int main(int argc, char *argv[]) {
         // \0 at the end of the string for solving valgrind errors 
         fn[fn_len]='\0';
         if(e!=fn_len) perror("Error from reading filename length (C1).\n");
-        
-        fprintf(stdout,"Sum: %s\n", sum);
-        fprintf(stdout,"File: %s\n", fn);
 
-        // Free memory
+        // print the couple
+        fprintf(stdout,"%s %s\n", sum,fn);
+
+        // free memory
         free(sum);
         free(fn);
       }
@@ -101,10 +100,13 @@ int main(int argc, char *argv[]) {
 
   }
   else{
+    // request Client 2
     char *endptr; // for using strtol
-    // send request for every valid number
+    // send request for every long
     for(int i=1;i<argc;i++){
+      // convert to long every number read with strtol
       long sum=strtol(argv[i], &endptr,10);
+      
       // open connection with socket 
       int skt_fd = 0;      // socket file descriptor 
       struct sockaddr_in serv_addr; // server address
@@ -112,48 +114,47 @@ int main(int argc, char *argv[]) {
   
       // create socket 
       if ((skt_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-        perror("Socket creation error. \n");
+        perror("Socket creation error (C2). \n");
       
-      // Address assigment
+      // address assigment, port number must me converted in  network order
       serv_addr.sin_family = AF_INET;
-      // port number must me converted in  network order
       serv_addr.sin_port = htons(PORT);
       serv_addr.sin_addr.s_addr = inet_addr(HOST);
       
-      // Open connection
+      // open connection
       if (connect(skt_fd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) 
-        perror("Error while opening connection. \n");
+        perror("Error while opening connection (C2). \n");
   
-      // Send request Client 2
+      // request Client 2
       char req[2] = "C2";
       int req_len = htonl(strlen(req));
 
-      // First the length then the request
+      // first the length then the request
       e = writen(skt_fd,&req_len,sizeof(req_len));
-      if(e!=sizeof(req_len)) perror("Client Write Error (req 2). \n");
+      if(e!=sizeof(req_len)) perror("Client Write Error req_len (C2). \n");
       e = writen(skt_fd,&req,ntohl(req_len)); //ntohl(req_len) = num bytes
-      if(e!=ntohl(req_len)) perror("Client Write Error (req 2). \n");
+      if(e!=ntohl(req_len)) perror("Client Write Error req (C2). \n");
 
-      // send the valid sum
+      // send the valid sum, one half at a time
       int second_half = htonl(sum);
       int first_half = htonl(sum >> 32);
       e = writen(skt_fd,&first_half,sizeof(first_half));
-      if(e!=sizeof(first_half)) perror("Write Error. \n");
+      if(e!=sizeof(first_half)) perror("Write Error first_half (C2). \n");
       e = writen(skt_fd,&second_half,sizeof(second_half));
-      if(e!=sizeof(second_half)) perror("Write Error. \n");
+      if(e!=sizeof(second_half)) perror("Write Error second_half (C2). \n");
       
       // First read how many things to read
       int len;
       e = readn(skt_fd,&len,sizeof(int));
       len = ntohl(len);
-      if(e!=sizeof(int)) perror("Error from reading the response (len C2). \n");
+      if(e!=sizeof(int)) perror("Error from reading len (C2). \n");
 
       // check len 
       if(len==0){
-        fprintf(stdout, "Nessun file.\n");
+        fprintf(stdout,"Nessun file.\n");
       }else{
       
-      // store every couple in 2 arrays, one fur sums and one for filenames, both have same dimension (len)
+      // store every couple in 2 strings, one for sums and one for file names
         char *fn, *sum;
         int fn_len, sum_len;
   
@@ -168,7 +169,7 @@ int main(int argc, char *argv[]) {
           e = readn(skt_fd,sum,sum_len);
           // \0 at the end of the string for solving valgrind errors 
           sum[sum_len]='\0';
-          if(e!=sum_len) perror("Error from reading sum  (C2).\n");
+          if(e!=sum_len) perror("Error from reading sum (C2).\n");
           
           // read file length then filename 
           e = readn(skt_fd,&fn_len,sizeof(int));
@@ -180,11 +181,11 @@ int main(int argc, char *argv[]) {
           // \0 at the end of the string for solving valgrind errors 
           fn[fn_len]='\0';
           if(e!=fn_len) perror("Error from reading filename length (C2).\n");
-          
-          fprintf(stdout,"Sum: %s\n", sum);
-          fprintf(stdout,"File: %s\n", fn);
+
+          // print couple
+          fprintf(stdout,"%s %s\n", sum,fn);
   
-          // Free memory
+          // free memory
           free(sum);
           free(fn);
         }
