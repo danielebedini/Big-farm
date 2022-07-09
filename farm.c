@@ -169,6 +169,10 @@ int main(int argc, char *argv[]) {
         }
         assert(del>=0);
       break;
+      default:
+        fprintf(stderr,"Flag name unvalid.\n");
+        return 0;
+      break;
     }
   }
 
