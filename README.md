@@ -14,7 +14,7 @@ Gestione parametri opzionali (nel main):
 
 - Uso della funzione di libreria getopt() per leggere e gestire i parametri opzionali.
 - Variabili globali per l'uso di getopt(): "extern char *optarg" e "extern int optind".
-- Per il flag "-n" e "-q" ho semplicemente utilizzato la funzione "atoi(optarg)" per convertire la stringa in numero, questo non da problemi nel caso in cui non sia valido il numero perché subito dopo ho aggiunto una "assert(nt || qlen > 0), in questo caso accetta solo numeri maggiori strettamente a 0.
+- Per il flag "-n" e "-q" ho semplicemente utilizzato la funzione "atoi(optarg)" per convertire la stringa in numero, questo non da problemi nel caso in cui non sia valido il numero perché subito dopo ho aggiunto una "assert(qlen > 0)" e "assert(tn>0)", in questo caso accetta solo numeri maggiori strettamente a 0.
 - Nel caso invece del flag "-t" ho utilizzato la funzione "strtol(optarg, &endptr,10)" che converte la stringa in numero in base 10. Se viene passato un valore non valido in questo caso con un controllo su "endptr" me ne accorgo, in questo caso il programma termina.
 
 Gestione Worker threads:
