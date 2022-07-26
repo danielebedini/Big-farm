@@ -28,9 +28,9 @@ void *wtbody(void * data){
   
   wdata *wd= (wdata *) data;
   char *fn;
-  long tot_sum=0;
   
   while(true){
+    long tot_sum=0;
     // reads filename from buffer, then increments the buffer index by 1
     xsem_wait(wd->sem_data_items,__LINE__,__FILE__);
 	  xpthread_mutex_lock(wd->cmutex,__LINE__,__FILE__);
